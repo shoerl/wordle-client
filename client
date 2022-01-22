@@ -1,0 +1,36 @@
+#!/usr/bin/python3
+import socket
+import json
+
+BUFFER_SIZE = 1024
+
+def main():
+  client_socket = get_connected_socket('proj1.3700.network', 27993)
+  game_id = get_game_id(client_socket, "hoerl.s")
+  guess_0 = get_guess_result(client_socket, game_id, "acorn")
+  print(guess_0)
+  client_socket.close()
+
+def get_guess_result(client_socket, game_id, guess):
+  msg = json.dumps({"type": "guess", "id": game_id, "word": guess}) + "\n"
+  msg_bytes = msg.encode()
+  client_socket.send(msg_bytes)
+  data = client_socket.recv(BUFFER_SIZE)
+  return json.loads(data.decode())
+
+# Accepts a client socket and username and starts the game and returns game id
+def get_game_id(client_socket, username):
+  outgoing_msg = json.dumps({"type": "hello", "northeastern_username": username}) + "\n"
+  outgoing_msg_bytes = outgoing_msg.encode()
+  client_socket.send(outgoing_msg_bytes)
+  data = client_socket.recv(BUFFER_SIZE)
+  return json.loads(data.decode())["id"]
+
+# Accepts a ip and port and returns a connected socket object
+def get_connected_socket(ip, port):
+  client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  client_socket.connect((ip, port))
+  return client_socket
+
+if __name__ == "__main__":
+  main()
