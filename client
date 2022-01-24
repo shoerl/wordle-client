@@ -1,15 +1,97 @@
 #!/usr/bin/python3
 import socket
 import json
+import random
+import re
+import argparse
+import ssl
 
 BUFFER_SIZE = 1024
 
 def main():
-  client_socket = get_connected_socket('proj1.3700.network', 27993)
-  game_id = get_game_id(client_socket, "hoerl.s")
-  guess_0 = get_guess_result(client_socket, game_id, "acorn")
-  print(guess_0)
+  parser = argparse.ArgumentParser()
+  parser.add_argument("-p", required=False, dest='port',  type=int, default=argparse.SUPPRESS)
+  parser.add_argument("-s", required=False, action='store_true', default=False)
+  parser.add_argument("hostname", type=str)
+  parser.add_argument("Northeastern-username", type=str)
+  args = parser.parse_args()
+  hostname = args.hostname
+  neu_username = getattr(args, "Northeastern-username")
+
+  # If TLS is specified but a port is not, use 27994
+  if args.s and not hasattr(args, 'port'):
+    port = 27994
+
+  # If neither TLS or a port is specified, use 27993
+  elif not hasattr(args, 'port'):
+    port = 27993
+
+  # Else port is specified, so use that port
+  else:
+    port = args.port
+
+ 
+  client_socket = get_connected_socket(hostname, port, args.s)
+  game_id = get_game_id(client_socket, neu_username)
+  play_game(client_socket, game_id)
   client_socket.close()
+
+
+def play_game(socket, game_id):
+  target = ['', '', '', '', '']
+  excluded = []
+  included = []
+  past_guesses = []
+  first_guess = random.choice(["adieu", "audio", "stare", "roast", "ratio", "arise", "tears"])
+  past_guesses.append(first_guess)
+  latest_guess = get_guess_result(socket, game_id, first_guess)
+  sorted_wordlist = open('project1-words-sorted.txt').read().splitlines()
+  while latest_guess['type'] != "bye":
+    update_metadata_from_guess(latest_guess['guesses'][-1], target, excluded, included)
+    regex = get_regex_from_guess_and_excluded(target, excluded)
+    guessed_word = get_next_guess(sorted_wordlist, regex, past_guesses)
+    past_guesses.append(guessed_word)
+    second_to_last = latest_guess
+    latest_guess = get_guess_result(socket, game_id, guessed_word)
+  
+  print(guessed_word)
+  print(len(second_to_last['guesses']))
+  print(latest_guess)
+  
+
+def get_next_guess(sorted_wordlist, regex, past_guesses):
+  for word in sorted_wordlist:
+    if re.search(regex, word) != None and word not in past_guesses:
+      return word
+
+def update_metadata_from_guess(guess, target, excluded, included):
+  for idx, element in enumerate(guess['marks']):
+    if element == 2:
+      target[idx] = guess['word'][idx]
+
+    elif element == 1:
+      if guess['word'][idx] not in included:
+        included.append(guess['word'][idx])
+
+    elif element == 0:
+      if guess['word'][idx] not in included and guess['word'][idx] not in excluded:
+        excluded.append(guess['word'][idx])
+
+  return
+
+
+def get_regex_from_guess_and_excluded(target, excluded):
+  regex = ""
+  for element in target:
+    if element == '' and len(excluded) == 0:
+      regex = "\w"
+    elif element == '':
+      regex += "[^" + ''.join(map(str, excluded)) + "]"
+    else:
+      regex += element
+  return regex
+
+
 
 def get_guess_result(client_socket, game_id, guess):
   msg = json.dumps({"type": "guess", "id": game_id, "word": guess}) + "\n"
@@ -26,8 +108,21 @@ def get_game_id(client_socket, username):
   data = client_socket.recv(BUFFER_SIZE)
   return json.loads(data.decode())["id"]
 
-# Accepts a ip and port and returns a connected socket object
-def get_connected_socket(ip, port):
+# Acceps a ip and port and returns a TLS connected socket object
+def get_tls_connected_socket(ip, port):
+  context = ssl.create_default_context()
+  context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+  context.load_verify_locations("/etc/ssl/certs/ca-bundle.crt")
+  client_socket = context.wrap_socket(socket.socket(socket.AF_INET), server_hostname=ip)
+  client_socket.connect((ip, port))
+  return client_socket
+
+# Accepts a ip and port and bool representing whether to use TLS 
+# and returns a connected socket object
+def get_connected_socket(ip, port, tls):
+  if tls:
+    return get_tls_connected_socket(ip, port)
+  
   client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   client_socket.connect((ip, port))
   return client_socket
