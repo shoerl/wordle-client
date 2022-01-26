@@ -9,11 +9,14 @@ import ssl
 BUFFER_SIZE = 1024
 
 def main():
+  # Initialize argument parser and add arguments
   parser = argparse.ArgumentParser()
   parser.add_argument("-p", required=False, dest='port',  type=int, default=argparse.SUPPRESS)
   parser.add_argument("-s", required=False, action='store_true', default=False)
   parser.add_argument("hostname", type=str)
   parser.add_argument("Northeastern-username", type=str)
+
+  # Parse arguments
   args = parser.parse_args()
   hostname = args.hostname
   neu_username = getattr(args, "Northeastern-username")
@@ -53,11 +56,8 @@ def play_game(socket, game_id):
     past_guesses.append(guessed_word)
     second_to_last = latest_guess
     latest_guess = get_guess_result(socket, game_id, guessed_word)
-  
-  print(guessed_word)
-  print(len(second_to_last['guesses']))
-  print(latest_guess)
-  
+
+  print(latest_guess['flag'])
 
 def get_next_guess(sorted_wordlist, regex, past_guesses):
   for word in sorted_wordlist:
