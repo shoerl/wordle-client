@@ -108,22 +108,15 @@ def get_game_id(client_socket, username):
   data = client_socket.recv(BUFFER_SIZE)
   return json.loads(data.decode())["id"]
 
-# Acceps a ip and port and returns a TLS connected socket object
-def get_tls_connected_socket(ip, port):
-  context = ssl.create_default_context()
-  context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-  context.load_verify_locations("/etc/ssl/certs/ca-bundle.crt")
-  client_socket = context.wrap_socket(socket.socket(socket.AF_INET), server_hostname=ip)
-  client_socket.connect((ip, port))
-  return client_socket
-
 # Accepts a ip and port and bool representing whether to use TLS 
 # and returns a connected socket object
 def get_connected_socket(ip, port, tls):
-  if tls:
-    return get_tls_connected_socket(ip, port)
-  
   client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+  
+  if tls:
+    context = ssl.create_default_context()
+    client_socket = context.wrap_socket(client_socket, server_hostname=ip)
+  
   client_socket.connect((ip, port))
   return client_socket
 
