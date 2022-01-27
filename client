@@ -54,6 +54,7 @@ def main():
 
 
 # Play game and return when we see the flag or an error
+# Accepts a socket and game id and returns nothing (may print a message)
 def play_game(socket, game_id):
   # Target is the word we are trying to find, we will fill in letters as we find them
   target = ['', '', '', '', '']
@@ -100,6 +101,8 @@ def play_game(socket, game_id):
 
 
 # Verify the recieved data we get and raise an error if something is wrong
+# Accepts the output data we recieve from the server (in json format) and the game id,
+# and returns nothing (may raise exception)
 def verify_recieved_data(data, game_id):
   if 'id' not in data:
     raise ValueError("The data we recieved does not contain a id. Something is wrong, exiting now.")
@@ -124,6 +127,7 @@ def verify_recieved_data(data, game_id):
     raise Exception("Recieved an unknown type of message. Exiting now.")
 
 # Use regex to find our next guess
+# Accepts the sorted wordlist, regex string, and list of past guesses, and returns the next guess
 def get_next_guess(sorted_wordlist, regex, past_guesses):
   for word in sorted_wordlist:
     # If word matches our regex and we haven't guessed it yet,
@@ -132,6 +136,8 @@ def get_next_guess(sorted_wordlist, regex, past_guesses):
       return word
 
 # Update our metadata arrays from our last guess
+# Accepts the result of our last guess, the target word, the excluded set, and the included set
+# and returns nothing. Though it does modify the target, excluded set, and included set
 def update_metadata_from_guess(guess, target, excluded, included):
   for idx, element in enumerate(guess['marks']):
     if element == 2:
@@ -149,6 +155,7 @@ def update_metadata_from_guess(guess, target, excluded, included):
   return
 
 # Build regex to search for next guess
+# Accepts the target string and excluded set and returns the regex string
 def get_regex_from_guess_and_excluded(target, excluded):
   regex = ""
   for element in target:
@@ -165,6 +172,8 @@ def get_regex_from_guess_and_excluded(target, excluded):
 
 
 # Make guess and parse guess results
+# Accepts a socket, the game id, and the word we are guessing and returns the
+# JSON object with the server output
 def make_guess_and_parse_guess_result(client_socket, game_id, guess):
   # Build json message and encode it
   msg = json.dumps({"type": "guess", "id": game_id, "word": guess}) + "\n"
