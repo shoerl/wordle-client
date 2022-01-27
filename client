@@ -37,7 +37,7 @@ def main():
   # Initialize socket
   client_socket = get_connected_socket(hostname, port, args.s)
 
-  # Start game and get game id
+  # Start game and get output
   start_game_output = start_game_and_get_output(client_socket, neu_username)
 
   if start_game_output['type'] == "error":
@@ -46,7 +46,7 @@ def main():
 
   else:
     # Play game
-    play_game(client_socket, game_id)
+    play_game(client_socket, start_game_output['id'])
 
   # Close socket
   client_socket.close()
