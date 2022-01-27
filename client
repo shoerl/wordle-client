@@ -39,14 +39,15 @@ def main():
 
   # Start game and get output
   start_game_output = start_game_and_get_output(client_socket, neu_username)
-
-  if start_game_output['type'] == "error":
-    # There must have been some sort of error, print error message and don't start game
-    print_error_message(start_game_output['message'])
+  
+  if 'id' not in start_game_output:
+    raise ValueError("The data we recieved does not contain a id. Something is wrong, exiting now.")
 
   else:
-    # Play game
-    play_game(client_socket, start_game_output['id'])
+    verify_recieved_data(start_game_output, start_game_output['id'])
+
+  # Play game
+  play_game(client_socket, start_game_output['id'])
 
   # Close socket
   client_socket.close()
@@ -75,12 +76,13 @@ def play_game(socket, game_id):
   
   # Make guess and parse guess result
   latest_guess = make_guess_and_parse_guess_result(socket, game_id, first_guess)
+  verify_recieved_data(latest_guess, game_id)
   
   # Parse the word list and store it in memory
   sorted_wordlist = open('project1-words-sorted.txt').read().splitlines()
 
-  # Keep playing until we see the bye or error type
-  while latest_guess['type'] != "bye" and latest_guess['type'] != "error":
+  # Keep playing until we see the bye
+  while latest_guess['type'] != "bye":
     # Update our arrays/metadata using the output of last guess
     update_metadata_from_guess(latest_guess['guesses'][-1], target, excluded, included)
     # Build regex to find next guess
@@ -91,17 +93,35 @@ def play_game(socket, game_id):
     past_guesses.append(guessed_word)
     # Parse output 
     latest_guess = make_guess_and_parse_guess_result(socket, game_id, guessed_word)
+    verify_recieved_data(latest_guess, game_id)
 
-  # If there was an error then let the user know
-  if latest_guess['type'] == "error":
-    print_error_message(latest_guess['message'])
+  # If we got here we successfully beat the game and have a flag, so print it
+  print(latest_guess['flag'])
 
-  # Else we successfully won the game and found the flag, so print it
-  else:
-    print(latest_guess['flag'])
 
-def print_error_message(message):
-  print("There was an error: {}".format(message))
+# Verify the recieved data we get and raise an error if something is wrong
+def verify_recieved_data(data, game_id):
+  if 'id' not in data:
+    raise ValueError("The data we recieved does not contain a id. Something is wrong, exiting now.")
+
+  elif data['id'] != game_id:
+    raise ValueError("The game id has changed, something is wrong. Exiting now.")
+
+  elif 'type' not in data:
+    raise ValueError("The data does not have a type, something is wrong. Exiting now.")
+
+  elif data['type'] == 'error':
+    raise Exception("There was an error: {}".format(message))
+
+  elif data['type'] == 'retry' and 'guesses' not in data:
+    raise ValueError("The data we recieved should have a word. Exiting now.")
+
+  elif data['type'] == 'bye' and 'flag' not in data:
+    raise ValueError("A bye message was recieved without a flag, exiting now.")
+
+  # if we get here and the type isnt start, then it is a type we have never seen
+  elif data['type'] not in ['retry', 'bye', 'start']:
+    raise Exception("Recieved an unknown type of message. Exiting now.")
 
 # Use regex to find our next guess
 def get_next_guess(sorted_wordlist, regex, past_guesses):
