@@ -38,12 +38,17 @@ def main():
   client_socket = get_connected_socket(hostname, port, args.s)
 
   # Start game and get game id
-  game_id = start_game_and_get_game_id(client_socket, neu_username)
+  start_game_output = start_game_and_get_output(client_socket, neu_username)
 
-  # Play game
-  play_game(client_socket, game_id)
+  if start_game_output['type'] == "error":
+    # There must have been some sort of error, print error message and don't start game
+    print_error_message(start_game_output['message'])
 
-  # Close socket since game is over
+  else:
+    # Play game
+    play_game(client_socket, game_id)
+
+  # Close socket
   client_socket.close()
 
 
@@ -89,11 +94,14 @@ def play_game(socket, game_id):
 
   # If there was an error then let the user know
   if latest_guess['type'] == "error":
-    print("There was an error: " + latest_guess['message'])
+    print_error_message(latest_guess['message'])
 
   # Else we successfully won the game and found the flag, so print it
   else:
     print(latest_guess['flag'])
+
+def print_error_message(message):
+  print("There was an error: {}".format(message))
 
 # Use regex to find our next guess
 def get_next_guess(sorted_wordlist, regex, past_guesses):
@@ -147,8 +155,8 @@ def make_guess_and_parse_guess_result(client_socket, game_id, guess):
   data = client_socket.recv(BUFFER_SIZE)
   return json.loads(data.decode())
 
-# Accepts a client socket and username and starts the game and returns game id
-def start_game_and_get_game_id(client_socket, username):
+# Accepts a client socket and username and starts the game and returns server output
+def start_game_and_get_output(client_socket, username):
   # Build json message and encode it
   outgoing_msg = json.dumps({"type": "hello", "northeastern_username": username}) + "\n"
   outgoing_msg_bytes = outgoing_msg.encode()
@@ -157,7 +165,7 @@ def start_game_and_get_game_id(client_socket, username):
   # Recieve data back from server and parse it into a json, and then return the game id
   # as that is the only thing we need at this point
   data = client_socket.recv(BUFFER_SIZE)
-  return json.loads(data.decode())["id"]
+  return json.loads(data.decode())
 
 # Accepts a ip and port and bool representing whether to use TLS 
 # and returns a connected socket object
