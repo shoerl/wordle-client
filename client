@@ -6,8 +6,8 @@ import re
 import argparse
 import ssl
 
-# Buffer size for recieving data
-BUFFER_SIZE = 1024
+# Buffer size for recieving data (4096 seems reasonable)
+BUFFER_SIZE = 4096
 
 def main():
   # Initialize argument parser and add arguments
