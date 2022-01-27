@@ -6,6 +6,7 @@ import re
 import argparse
 import ssl
 
+# Buffer size for recieving data
 BUFFER_SIZE = 1024
 
 def main():
@@ -21,90 +22,140 @@ def main():
   hostname = args.hostname
   neu_username = getattr(args, "Northeastern-username")
 
-  # If TLS is specified but a port is not, use 27994
-  if args.s and not hasattr(args, 'port'):
+  # If a port is specified, use that port
+  if hasattr(args, 'port'):
+    port = args.port
+  
+  # If a port is not specified but ssl is, use port 27994
+  elif args.s:
     port = 27994
 
-  # If neither TLS or a port is specified, use 27993
-  elif not hasattr(args, 'port'):
-    port = 27993
-
-  # Else port is specified, so use that port
+  # Neither a port nor ssl is specified, use port 27993
   else:
-    port = args.port
-
+    port = 27993
  
+  # Initialize socket
   client_socket = get_connected_socket(hostname, port, args.s)
-  game_id = get_game_id(client_socket, neu_username)
+
+  # Start game and get game id
+  game_id = start_game_and_get_game_id(client_socket, neu_username)
+
+  # Play game
   play_game(client_socket, game_id)
+
+  # Close socket since game is over
   client_socket.close()
 
 
+# Play game and return when we see the flag or an error
 def play_game(socket, game_id):
+  # Target is the word we are trying to find, we will fill in letters as we find them
   target = ['', '', '', '', '']
-  excluded = []
-  included = []
+  
+  # Excluded set (aka any letters that are not in the word)
+  excluded = set()
+
+  # Included set (aka any letters that are in word but we don't know location)
+  included = set()
+
+  # Keep a set of past guesses to ensure we don't guess the same word twice
   past_guesses = []
+
+  # Use one of these words as a first choice in hopes that we reveal some letters
+  # I got this word list from https://ftw.usatoday.com/lists/wordle-best-first-words-list
   first_guess = random.choice(["adieu", "audio", "stare", "roast", "ratio", "arise", "tears"])
+
+  # Keep track of last guess
   past_guesses.append(first_guess)
-  latest_guess = get_guess_result(socket, game_id, first_guess)
+  
+  # Make guess and parse guess result
+  latest_guess = make_guess_and_parse_guess_result(socket, game_id, first_guess)
+  
+  # Parse the word list and store it in memory
   sorted_wordlist = open('project1-words-sorted.txt').read().splitlines()
-  while latest_guess['type'] != "bye":
+
+  # Keep playing until we see the bye or error type
+  while latest_guess['type'] != "bye" and latest_guess['type'] != "error":
+    # Update our arrays/metadata using the output of last guess
     update_metadata_from_guess(latest_guess['guesses'][-1], target, excluded, included)
+    # Build regex to find next guess
     regex = get_regex_from_guess_and_excluded(target, excluded)
+    # Search for next guess
     guessed_word = get_next_guess(sorted_wordlist, regex, past_guesses)
+    # Append last guess to ensure we don't guess it again
     past_guesses.append(guessed_word)
-    second_to_last = latest_guess
-    latest_guess = get_guess_result(socket, game_id, guessed_word)
+    # Parse output 
+    latest_guess = make_guess_and_parse_guess_result(socket, game_id, guessed_word)
 
-  print(latest_guess['flag'])
+  # If there was an error then let the user know
+  if latest_guess['type'] == "error":
+    print("There was an error: " + latest_guess['message'])
 
+  # Else we successfully won the game and found the flag, so print it
+  else:
+    print(latest_guess['flag'])
+
+# Use regex to find our next guess
 def get_next_guess(sorted_wordlist, regex, past_guesses):
   for word in sorted_wordlist:
+    # If word matches our regex and we haven't guessed it yet,
+    # then that is our next guess
     if re.search(regex, word) != None and word not in past_guesses:
       return word
 
+# Update our metadata arrays from our last guess
 def update_metadata_from_guess(guess, target, excluded, included):
   for idx, element in enumerate(guess['marks']):
     if element == 2:
       target[idx] = guess['word'][idx]
 
     elif element == 1:
-      if guess['word'][idx] not in included:
-        included.append(guess['word'][idx])
+      # Add word to included set
+      included.add(guess['word'][idx])
 
     elif element == 0:
-      if guess['word'][idx] not in included and guess['word'][idx] not in excluded:
-        excluded.append(guess['word'][idx])
+      # If word is excluded but we have already seen it in our included set, don't add it
+      if guess['word'][idx] not in included:
+        excluded.add(guess['word'][idx])
 
   return
 
-
+# Build regex to search for next guess
 def get_regex_from_guess_and_excluded(target, excluded):
   regex = ""
   for element in target:
+    # If we have nothing to exclude, than it could be any letter
     if element == '' and len(excluded) == 0:
       regex = "\w"
+    # Build regex that ignores all excluded letters
     elif element == '':
       regex += "[^" + ''.join(map(str, excluded)) + "]"
+    # If we know what the letter is, than just add it to the regex
     else:
       regex += element
   return regex
 
 
-
-def get_guess_result(client_socket, game_id, guess):
+# Make guess and parse guess results
+def make_guess_and_parse_guess_result(client_socket, game_id, guess):
+  # Build json message and encode it
   msg = json.dumps({"type": "guess", "id": game_id, "word": guess}) + "\n"
   msg_bytes = msg.encode()
+  # Use client socket to send message
   client_socket.send(msg_bytes)
+  # Recieve data back from server and parse it into a json
   data = client_socket.recv(BUFFER_SIZE)
   return json.loads(data.decode())
 
 # Accepts a client socket and username and starts the game and returns game id
-def get_game_id(client_socket, username):
+def start_game_and_get_game_id(client_socket, username):
+  # Build json message and encode it
   outgoing_msg = json.dumps({"type": "hello", "northeastern_username": username}) + "\n"
   outgoing_msg_bytes = outgoing_msg.encode()
+  # Use client socket to send message
   client_socket.send(outgoing_msg_bytes)
+  # Recieve data back from server and parse it into a json, and then return the game id
+  # as that is the only thing we need at this point
   data = client_socket.recv(BUFFER_SIZE)
   return json.loads(data.decode())["id"]
 
@@ -113,6 +164,7 @@ def get_game_id(client_socket, username):
 def get_connected_socket(ip, port, tls):
   client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   
+  # if tls than wrap socket
   if tls:
     context = ssl.create_default_context()
     client_socket = context.wrap_socket(client_socket, server_hostname=ip)
