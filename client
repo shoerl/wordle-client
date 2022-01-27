@@ -162,9 +162,11 @@ def start_game_and_get_game_id(client_socket, username):
 # Accepts a ip and port and bool representing whether to use TLS 
 # and returns a connected socket object
 def get_connected_socket(ip, port, tls):
+  # Learned how to do this from https://docs.python.org/3/howto/sockets.html
   client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
   
   # if tls than wrap socket
+  # Learned how to do this from https://docs.python.org/3/library/ssl.html#module-ssl
   if tls:
     context = ssl.create_default_context()
     client_socket = context.wrap_socket(client_socket, server_hostname=ip)
